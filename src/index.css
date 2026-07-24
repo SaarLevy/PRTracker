@@ -176,10 +176,6 @@ button {
   font-size: 14px;
 }
 
-.search-input {
-  margin-bottom: 4px;
-}
-
 .btn {
   display: inline-flex;
   align-items: center;

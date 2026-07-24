@@ -45,7 +45,7 @@ export default function ExerciseList() {
   }
 
   return (
-    <div className="screen screen-no-dock">
+    <div className="screen">
       <header className="top-bar">
         <span className="wordmark">PRTRACKER</span>
         <Link href="/settings" className="icon-btn" aria-label="Settings">
@@ -53,22 +53,11 @@ export default function ExerciseList() {
         </Link>
       </header>
 
-      <form onSubmit={handleFormSubmit}>
-        <input
-          type="search"
-          className="search-input"
-          placeholder="Search or add an exercise"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search or add an exercise"
-        />
-      </form>
-
       {loaded && exercises.length === 0 && !query.trim() && (
         <p className="empty">
           <strong>No exercises yet.</strong>
           <br />
-          Search above for a common lift, or type a name to add your own.
+          Search below for a common lift, or type a name to add your own.
         </p>
       )}
 
@@ -134,6 +123,17 @@ export default function ExerciseList() {
           </li>
         )}
       </ul>
+
+      <form className="dock" onSubmit={handleFormSubmit}>
+        <input
+          type="search"
+          className="search-input"
+          placeholder="Search or add an exercise"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Search or add an exercise"
+        />
+      </form>
     </div>
   );
 }
