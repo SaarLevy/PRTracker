@@ -240,11 +240,41 @@ button {
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
   min-height: 68px;
   padding: 12px 4px;
+  background: none;
+  border: none;
   border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  text-align: left;
   text-decoration: none;
   color: inherit;
+}
+
+.exercise-row-library .exercise-name {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.exercise-row-add {
+  color: var(--red);
+}
+
+.exercise-row-add .exercise-name {
+  font-weight: 600;
+}
+
+.row-plus {
+  flex: none;
+  font-family: var(--display);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.exercise-row-add .row-plus {
+  color: var(--red);
 }
 
 .exercise-info {
@@ -488,15 +518,6 @@ button {
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-top: 1px solid var(--line);
-}
-
-.add-row {
-  display: flex;
-  gap: 8px;
-}
-
-.add-row .text-input {
-  flex: 1;
 }
 
 .log-extras {

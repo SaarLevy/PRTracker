@@ -4,13 +4,13 @@ import { Link, useLocation } from 'wouter';
 import { GearIcon } from '../components/icons';
 import { addExercise, db } from '../db';
 import { formatWeightKg, timeAgo } from '../lib/format';
+import { searchExercises } from '../lib/exerciseSearch';
 import { chronological, overallBest } from '../lib/records';
 import type { Entry } from '../types';
 
 export default function ExerciseList() {
   const [, navigate] = useLocation();
-  const [search, setSearch] = useState('');
-  const [newName, setNewName] = useState('');
+  const [query, setQuery] = useState('');
 
   const exercises = useLiveQuery(() => db.exercises.toArray(), []);
   const entries = useLiveQuery(() => db.entries.toArray(), []);
@@ -25,27 +25,27 @@ export default function ExerciseList() {
     return map;
   }, [entries]);
 
-  const visible = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return (exercises ?? [])
-      .filter((e) => e.name.toLowerCase().includes(query))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [exercises, search]);
+  const results = useMemo(() => searchExercises(query, exercises ?? []), [query, exercises]);
 
   const loaded = exercises !== undefined && entries !== undefined;
   const now = new Date();
 
-  async function handleAdd(event: React.FormEvent) {
-    event.preventDefault();
-    const name = newName.trim();
-    if (!name) return;
-    const id = await addExercise(name);
-    setNewName('');
+  async function handleResolve(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const match = exercises?.find((e) => e.name.trim().toLowerCase() === trimmed.toLowerCase());
+    const id = match ? match.id : await addExercise(trimmed);
+    setQuery('');
     navigate(`/exercise/${id}`);
   }
 
+  function handleFormSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    void handleResolve(query);
+  }
+
   return (
-    <div className="screen">
+    <div className="screen screen-no-dock">
       <header className="top-bar">
         <span className="wordmark">PRTRACKER</span>
         <Link href="/settings" className="icon-btn" aria-label="Settings">
@@ -53,31 +53,27 @@ export default function ExerciseList() {
         </Link>
       </header>
 
-      {(exercises?.length ?? 0) > 0 && (
+      <form onSubmit={handleFormSubmit}>
         <input
           type="search"
           className="search-input"
-          placeholder="Search exercises"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search exercises"
+          placeholder="Search or add an exercise"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Search or add an exercise"
         />
-      )}
+      </form>
 
-      {loaded && exercises.length === 0 && (
+      {loaded && exercises.length === 0 && !query.trim() && (
         <p className="empty">
           <strong>No exercises yet.</strong>
           <br />
-          Add your first lift below — then log a set whenever you train it.
+          Search above for a common lift, or type a name to add your own.
         </p>
       )}
 
-      {loaded && exercises.length > 0 && visible.length === 0 && (
-        <p className="empty">Nothing matches "{search.trim()}".</p>
-      )}
-
       <ul className="exercise-rows">
-        {visible.map((exercise) => {
+        {results.existing.map((exercise) => {
           const list = entriesByExercise.get(exercise.id) ?? [];
           const latest = chronological(list).at(-1);
           const best = overallBest(list);
@@ -102,23 +98,42 @@ export default function ExerciseList() {
             </li>
           );
         })}
-      </ul>
 
-      <form className="dock" onSubmit={handleAdd}>
-        <div className="add-row">
-          <input
-            type="text"
-            className="text-input"
-            placeholder="New exercise, e.g. Bench Press"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            aria-label="New exercise name"
-          />
-          <button type="submit" className="btn btn-primary" disabled={!newName.trim()}>
-            Add
-          </button>
-        </div>
-      </form>
+        {results.libraryOnly.map((name) => (
+          <li key={name}>
+            <button
+              type="button"
+              className="exercise-row exercise-row-library"
+              onClick={() => void handleResolve(name)}
+            >
+              <span className="exercise-info">
+                <span className="exercise-name">{name}</span>
+                <span className="exercise-sub">Not tracked yet</span>
+              </span>
+              <span className="row-plus" aria-hidden="true">
+                +
+              </span>
+            </button>
+          </li>
+        ))}
+
+        {results.showAddLiteral && (
+          <li>
+            <button
+              type="button"
+              className="exercise-row exercise-row-add"
+              onClick={() => void handleResolve(query)}
+            >
+              <span className="exercise-info">
+                <span className="exercise-name">Add "{query.trim()}"</span>
+              </span>
+              <span className="row-plus" aria-hidden="true">
+                +
+              </span>
+            </button>
+          </li>
+        )}
+      </ul>
     </div>
   );
 }
