@@ -636,3 +636,124 @@ button {
   color: var(--muted);
   line-height: 1.5;
 }
+
+/* ---------- workout plan ---------- */
+
+.screen-wod {
+  padding-bottom: 104px;
+}
+
+.wod-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--chalk);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.wod-textarea::placeholder {
+  color: var(--muted);
+}
+
+.wod-load {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.wod-group {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+.wod-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  text-align: left;
+}
+
+.wod-group-state {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.wod-item + .wod-item {
+  margin-top: 12px;
+}
+
+.wod-item-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.wod-item-name {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 16px;
+}
+
+.wod-item-hint {
+  font-size: 13px;
+  color: var(--gold);
+}
+
+.wod-sets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.set-box {
+  display: flex;
+  flex-direction: column;
+  width: 72px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* A filled set reads at a glance, so you can find the next empty one mid-workout. */
+.set-box:has(.set-weight:not(:placeholder-shown)) {
+  border-color: var(--red);
+}
+
+.set-weight,
+.set-reps {
+  width: 100%;
+  background: none;
+  border: 0;
+  text-align: center;
+}
+
+.set-weight {
+  height: 52px;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 21px;
+}
+
+/* Deliberately small: weight is the field you tap between sets, reps is the exception. */
+.set-reps {
+  height: 26px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.set-weight::placeholder,
+.set-reps::placeholder {
+  color: var(--muted);
+  font-weight: 400;
+}

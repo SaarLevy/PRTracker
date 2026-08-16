@@ -3,6 +3,7 @@ import { useHashLocation } from 'wouter/use-hash-location';
 import ExerciseDetail from './routes/ExerciseDetail';
 import ExerciseList from './routes/ExerciseList';
 import Settings from './routes/Settings';
+import Workout from './routes/Workout';
 
 export default function App() {
   return (
@@ -10,6 +11,7 @@ export default function App() {
       <Switch>
         <Route path="/" component={ExerciseList} />
         <Route path="/exercise/:id" component={ExerciseDetail} />
+        <Route path="/workout" component={Workout} />
         <Route path="/settings" component={Settings} />
         <Route>
           <div className="screen">

@@ -7,6 +7,10 @@ import '@fontsource/atkinson-hyperlegible/400.css';
 import '@fontsource/atkinson-hyperlegible/700.css';
 import './index.css';
 import App from './App.tsx';
+import { consumeSharedPlan } from './lib/plan';
+
+// Must run before the router reads the location, since importing redirects to the workout screen.
+consumeSharedPlan();
 
 // Ask the browser not to evict IndexedDB data under storage pressure.
 navigator.storage?.persist?.().catch(() => {});
