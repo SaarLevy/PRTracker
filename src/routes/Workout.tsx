@@ -1,11 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { BackIcon } from '../components/icons';
 import { addEntry, addExercise, db } from '../db';
 import type { PlannedSet } from '../lib/parseWod';
 import { type Plan, clearPlan, collectEntries, loadPlan, planFromText, savePlan } from '../lib/plan';
+import { type OcrProgress, ocrImage, takeSharedWod } from '../lib/shareImport';
 
 const PLACEHOLDER = ['3 Super-sets', '8\\8 DB SL RDL', '15 Sit ups', '-', '3 Sets', '8-12 Deadlift'].join('\n');
+
+// Module-level so StrictMode's double mount can't consume (and OCR) the same share twice;
+// arriving via the share target always reloads the document, which resets this.
+let shareChecked = false;
 
 interface SetBoxProps {
   set: PlannedSet;
@@ -56,6 +61,38 @@ export default function Workout() {
   const [text, setText] = useState('');
   const [failed, setFailed] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
+  const [importing, setImporting] = useState<OcrProgress | null>(null);
+
+  useEffect(() => {
+    if (shareChecked) return;
+    shareChecked = true;
+
+    void (async () => {
+      const shared = await takeSharedWod();
+      if (!shared) return;
+
+      // A share replaces the plan wholesale; only ask when there is filled-in work to lose.
+      const current = loadPlan();
+      const touched = current?.groups.some((g) => g.items.some((i) => i.sets.some((s) => s.weightKg !== null)));
+      if (touched && !confirm('Replace the current plan? Weights you filled in will be lost.')) return;
+
+      let raw = shared.text ?? '';
+      if (!raw && shared.image) {
+        setImporting({ status: 'starting', progress: 0 });
+        try {
+          raw = await ocrImage(shared.image, setImporting);
+        } catch {
+          setFailed(true);
+          return;
+        } finally {
+          setImporting(null);
+        }
+      }
+      // On a parse failure the text stays in the textarea for hand-fixing.
+      setText(raw);
+      importText(raw);
+    })();
+  }, []);
 
   function importText(raw: string) {
     const next = planFromText(raw);
@@ -120,6 +157,25 @@ export default function Workout() {
 
     clearPlan();
     navigate('/');
+  }
+
+  if (importing) {
+    const percent = Math.round(importing.progress * 100);
+    return (
+      <div className="screen screen-no-dock">
+        <header className="top-bar">
+          <Link href="/" className="icon-btn" aria-label="Back to exercises">
+            <BackIcon />
+          </Link>
+          <h1 className="exercise-title">Workout</h1>
+        </header>
+        <p className="empty">
+          <strong>Reading shared workout…</strong>
+          <br />
+          {importing.status} {percent}%
+        </p>
+      </div>
+    );
   }
 
   if (!plan) {

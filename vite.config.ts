@@ -12,6 +12,8 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,woff}'],
+        // Adds the share-target POST handler to the generated service worker.
+        importScripts: ['share-target-sw.js'],
       },
       manifest: {
         name: 'PRTracker',
@@ -25,6 +27,19 @@ export default defineConfig({
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
           { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
+        // Lets the installed app receive a workout from another app's share sheet,
+        // as an image (OCR'd on arrival) or as plain text.
+        share_target: {
+          action: 'share-target',
+          method: 'POST',
+          enctype: 'multipart/form-data',
+          params: {
+            title: 'title',
+            text: 'text',
+            url: 'url',
+            files: [{ name: 'image', accept: ['image/*'] }],
+          },
+        },
       },
     }),
   ],
