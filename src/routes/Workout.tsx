@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { BackIcon } from '../components/icons';
 import { addEntry, addExercise, db } from '../db';
@@ -11,6 +12,9 @@ const PLACEHOLDER = ['3 Super-sets', '8\\8 DB SL RDL', '15 Sit ups', '-', '3 Set
 // Module-level so StrictMode's double mount can't consume (and OCR) the same share twice;
 // arriving via the share target always reloads the document, which resets this.
 let shareChecked = false;
+
+/** Exercises are matched to plan items by name, case- and whitespace-insensitively. */
+const key = (name: string) => name.trim().toLowerCase();
 
 interface SetBoxProps {
   set: PlannedSet;
@@ -55,6 +59,22 @@ function SetBox({ set, onChange }: SetBoxProps) {
   );
 }
 
+/**
+ * An exercise name, linked to its history when the exercise is already tracked.
+ *
+ * Plan items are names, not ids — nothing is written to the database until finalize — so a
+ * name with no match yet stays plain text, which is also exactly when there is no history
+ * behind the link anyway.
+ */
+function ExerciseName({ name, exerciseId }: { name: string; exerciseId?: string }) {
+  if (!exerciseId) return <span className="wod-item-name">{name}</span>;
+  return (
+    <Link href={`/exercise/${exerciseId}`} className="wod-item-name wod-item-link">
+      {name}
+    </Link>
+  );
+}
+
 export default function Workout() {
   const [, navigate] = useLocation();
   const [plan, setPlan] = useState<Plan | null>(() => loadPlan());
@@ -62,6 +82,12 @@ export default function Workout() {
   const [failed, setFailed] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
   const [importing, setImporting] = useState<OcrProgress | null>(null);
+
+  const exercises = useLiveQuery(() => db.exercises.toArray(), []);
+  const idByName = useMemo(
+    () => new Map((exercises ?? []).map((exercise) => [exercise.name.trim().toLowerCase(), exercise.id])),
+    [exercises],
+  );
 
   useEffect(() => {
     if (shareChecked) return;
@@ -246,24 +272,59 @@ export default function Workout() {
                 {done && <span className="wod-group-state">{open ? 'hide' : 'done'}</span>}
               </button>
 
-              {open &&
-                group.items.map((item, itemIndex) => (
-                  <div key={itemIndex} className="wod-item">
-                    <div className="wod-item-head">
-                      <span className="wod-item-name">{item.name}</span>
+              {open && group.items.length === 1 && (
+                <div className="wod-item">
+                  <div className="wod-item-head">
+                    <ExerciseName name={group.items[0].name} exerciseId={idByName.get(key(group.items[0].name))} />
+                    {group.items[0].hint && <span className="wod-item-hint">{group.items[0].hint}</span>}
+                  </div>
+                  <div className="wod-sets">
+                    {group.items[0].sets.map((set, setIndex) => (
+                      <SetBox
+                        key={setIndex}
+                        set={set}
+                        onChange={(patch) => updateSet(groupIndex, 0, setIndex, patch)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Two or more exercises means you alternate between them, so a round reads across:
+                  one column per exercise, one row per round. */}
+              {open && group.items.length > 1 && (
+                <div
+                  className="wod-grid"
+                  style={{ gridTemplateColumns: `18px repeat(${group.items.length}, minmax(0, 1fr))` }}
+                >
+                  <span />
+                  {group.items.map((item, itemIndex) => (
+                    <div key={itemIndex} className="wod-grid-head">
+                      <ExerciseName name={item.name} exerciseId={idByName.get(key(item.name))} />
                       {item.hint && <span className="wod-item-hint">{item.hint}</span>}
                     </div>
-                    <div className="wod-sets">
-                      {item.sets.map((set, setIndex) => (
-                        <SetBox
-                          key={setIndex}
-                          set={set}
-                          onChange={(patch) => updateSet(groupIndex, itemIndex, setIndex, patch)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  ))}
+
+                  {Array.from({ length: Math.max(...group.items.map((item) => item.sets.length)) }, (_, round) => (
+                    <Fragment key={round}>
+                      <span className="wod-round-index" aria-hidden="true">
+                        {round + 1}
+                      </span>
+                      {group.items.map((item, itemIndex) =>
+                        item.sets[round] ? (
+                          <SetBox
+                            key={itemIndex}
+                            set={item.sets[round]}
+                            onChange={(patch) => updateSet(groupIndex, itemIndex, round, patch)}
+                          />
+                        ) : (
+                          <span key={itemIndex} />
+                        ),
+                      )}
+                    </Fragment>
+                  ))}
+                </div>
+              )}
             </section>
           );
         })}

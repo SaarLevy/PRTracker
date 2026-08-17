@@ -708,6 +708,46 @@ button {
   color: var(--gold);
 }
 
+.wod-item-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+}
+
+/* Supersets and drop sets read across: a column per exercise, a row per round. */
+.wod-grid {
+  display: grid;
+  gap: 8px;
+  align-items: center;
+  padding-top: 6px;
+}
+
+.wod-grid-head {
+  display: flex;
+  flex-direction: column;
+  align-self: end;
+  min-width: 0;
+  padding-bottom: 2px;
+}
+
+.wod-grid-head .wod-item-name {
+  font-size: 14px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.wod-round-index {
+  font-family: var(--display);
+  font-size: 13px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.wod-grid .set-box {
+  width: 100%;
+}
+
 .wod-sets {
   display: flex;
   flex-wrap: wrap;
