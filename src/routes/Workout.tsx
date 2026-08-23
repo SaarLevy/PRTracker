@@ -80,7 +80,7 @@ export default function Workout() {
   const [plan, setPlan] = useState<Plan | null>(() => loadPlan());
   const [text, setText] = useState('');
   const [failed, setFailed] = useState(false);
-  const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
+  const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
   const [importing, setImporting] = useState<OcrProgress | null>(null);
 
   const exercises = useLiveQuery(() => db.exercises.toArray(), []);
@@ -130,7 +130,7 @@ export default function Workout() {
     setPlan(next);
     setText('');
     setFailed(false);
-    setExpanded(new Set());
+    setCollapsed(new Set());
   }
 
   function updateSet(groupIndex: number, itemIndex: number, setIndex: number, patch: Partial<PlannedSet>) {
@@ -142,7 +142,7 @@ export default function Workout() {
   }
 
   function toggleGroup(index: number) {
-    setExpanded((prev) => {
+    setCollapsed((prev) => {
       const next = new Set(prev);
       if (!next.delete(index)) next.add(index);
       return next;
@@ -261,15 +261,12 @@ export default function Workout() {
 
       <div key={plan.createdAt}>
         {plan.groups.map((group, groupIndex) => {
-          const sets = group.items.flatMap((item) => item.sets);
-          const done = sets.every((set) => set.weightKg !== null);
-          const open = !done || expanded.has(groupIndex);
-
+          const open = !collapsed.has(groupIndex);
           return (
             <section key={groupIndex} className="wod-group">
               <button type="button" className="wod-group-head" onClick={() => toggleGroup(groupIndex)}>
                 <span className="section-label">{group.label}</span>
-                {done && <span className="wod-group-state">{open ? 'hide' : 'done'}</span>}
+                <span className="wod-group-state">{open ? 'hide' : 'show'}</span>
               </button>
 
               {open && group.items.length === 1 && (
