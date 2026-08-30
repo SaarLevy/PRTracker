@@ -729,7 +729,7 @@ button {
 .wod-item-link {
   color: inherit;
   text-decoration: underline;
-  text-decoration-color: var(--line);
+  text-decoration-color: var(--muted);
   text-underline-offset: 3px;
 }
 
