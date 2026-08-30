@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import type { Exercise } from '../types';
-import { searchExercises } from './exerciseSearch';
+import { searchExercises, suggestSimilar } from './exerciseSearch';
 
 let seq = 0;
 function exercise(name: string, id?: string): Exercise {
@@ -92,5 +92,22 @@ describe('searchExercises', () => {
     const ab = exercise('Ab Squat Hold');
     const result = searchExercises('squat', [zed, ab], LIB);
     expect(result.existing).toEqual([ab, zed]);
+  });
+});
+
+describe('suggestSimilar', () => {
+  const names = ['Goblet squat', 'Bench press', 'DB SL RDL'];
+
+  test('finds the intended name through an OCR typo', () => {
+    expect(suggestSimilar('Goblet sqaut', names)).toBe('Goblet squat');
+  });
+
+  test('finds the intended name through reordered words', () => {
+    expect(suggestSimilar('SL DB RDL', names)).toBe('DB SL RDL');
+  });
+
+  test('returns null when nothing is convincingly close', () => {
+    expect(suggestSimilar('Farmer carry', names)).toBeNull();
+    expect(suggestSimilar('', names)).toBeNull();
   });
 });

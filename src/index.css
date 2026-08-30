@@ -678,6 +678,29 @@ button {
   color: var(--muted);
 }
 
+/* Same underline as a linked exercise in the plan: "this name has history". */
+.wod-preview-known {
+  text-decoration: underline;
+  text-decoration-color: var(--muted);
+  text-underline-offset: 3px;
+}
+
+.wod-preview-new {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.wod-preview-suggest {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 .wod-load {
   width: 100%;
   margin-top: 12px;

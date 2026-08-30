@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { BackIcon } from '../components/icons';
 import { addEntry, addExercise, db } from '../db';
+import { suggestSimilar } from '../lib/exerciseSearch';
 import { type PlannedSet, parseWod } from '../lib/parseWod';
 import { type Plan, clearPlan, collectEntries, loadPlan, planFromText, savePlan } from '../lib/plan';
 import { type OcrProgress, ocrImage, takeSharedWod } from '../lib/shareImport';
@@ -90,6 +91,7 @@ export default function Workout() {
     () => new Map((exercises ?? []).map((exercise) => [exercise.name.trim().toLowerCase(), exercise.id])),
     [exercises],
   );
+  const exerciseNames = useMemo(() => (exercises ?? []).map((exercise) => exercise.name), [exercises]);
 
   useEffect(() => {
     if (shareChecked) return;
@@ -243,14 +245,38 @@ export default function Workout() {
                   {group.label}
                   {group.items.length > 1 ? ` · ${group.items.length} columns` : ''}
                 </span>
-                {group.items.map((item, itemIndex) => (
-                  <p key={itemIndex} className="wod-preview-item">
-                    <span className="wod-preview-count">{item.sets.length}×</span>{' '}
-                    {item.sets[0]?.repsLabel ? `${item.sets[0].repsLabel} ` : ''}
-                    {item.name}
-                    {item.hint && <span className="wod-item-hint"> {item.hint}</span>}
-                  </p>
-                ))}
+                {group.items.map((item, itemIndex) => {
+                  const known = idByName.has(key(item.name));
+                  const suggestion = known ? null : suggestSimilar(item.name, exerciseNames);
+                  return (
+                    <p key={itemIndex} className="wod-preview-item">
+                      <span className="wod-preview-count">{item.sets.length}×</span>{' '}
+                      {item.sets[0]?.repsLabel ? `${item.sets[0].repsLabel} ` : ''}
+                      <span className={known ? 'wod-preview-known' : undefined}>{item.name}</span>
+                      {item.hint && <span className="wod-item-hint"> {item.hint}</span>}
+                      {!known && (
+                        <span className="wod-preview-new">
+                          {' '}
+                          new
+                          {suggestion && (
+                            <>
+                              {' · '}
+                              {/* The name is a verbatim substring of the text, so applying the
+                                  suggestion is a plain replace; the preview re-parses from it. */}
+                              <button
+                                type="button"
+                                className="wod-preview-suggest"
+                                onClick={() => setText((current) => current.replace(item.name, suggestion))}
+                              >
+                                did you mean “{suggestion}”?
+                              </button>
+                            </>
+                          )}
+                        </span>
+                      )}
+                    </p>
+                  );
+                })}
               </section>
             ))}
           </div>
