@@ -660,6 +660,24 @@ button {
   color: var(--muted);
 }
 
+.wod-preview {
+  margin-top: 4px;
+}
+
+.wod-preview .section-label {
+  display: block;
+  margin: 12px 0 4px;
+}
+
+.wod-preview-item {
+  margin: 2px 0;
+  font-size: 14px;
+}
+
+.wod-preview-count {
+  color: var(--muted);
+}
+
 .wod-load {
   width: 100%;
   margin-top: 12px;

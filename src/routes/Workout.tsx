@@ -3,7 +3,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { BackIcon } from '../components/icons';
 import { addEntry, addExercise, db } from '../db';
-import type { PlannedSet } from '../lib/parseWod';
+import { type PlannedSet, parseWod } from '../lib/parseWod';
 import { type Plan, clearPlan, collectEntries, loadPlan, planFromText, savePlan } from '../lib/plan';
 import { type OcrProgress, ocrImage, takeSharedWod } from '../lib/shareImport';
 
@@ -79,7 +79,9 @@ export default function Workout() {
   const [, navigate] = useLocation();
   const [plan, setPlan] = useState<Plan | null>(() => loadPlan());
   const [text, setText] = useState('');
+  // Only OCR failures need a flag; parse feedback is live via the preview.
   const [failed, setFailed] = useState(false);
+  const preview = useMemo(() => parseWod(text), [text]);
   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
   const [importing, setImporting] = useState<OcrProgress | null>(null);
 
@@ -114,22 +116,20 @@ export default function Workout() {
           setImporting(null);
         }
       }
-      // On a parse failure the text stays in the textarea for hand-fixing.
+      // Land in the review screen instead of importing directly, so OCR mistakes can be
+      // fixed in the text before the plan is built.
+      clearPlan();
+      setPlan(null);
       setText(raw);
-      importText(raw);
     })();
   }, []);
 
   function importText(raw: string) {
     const next = planFromText(raw);
-    if (!next) {
-      setFailed(true);
-      return;
-    }
+    if (!next) return;
     savePlan(next);
     setPlan(next);
     setText('');
-    setFailed(false);
     setCollapsed(new Set());
   }
 
@@ -217,7 +217,8 @@ export default function Workout() {
         <p className="empty">
           <strong>No plan loaded.</strong>
           <br />
-          Paste the workout text below to turn it into a set-by-set sheet you can fill in as you train.
+          Paste the workout text below. The preview shows how it will be read — edit the text until it looks
+          right, then load.
         </p>
 
         <textarea
@@ -231,12 +232,34 @@ export default function Workout() {
             setFailed(false);
           }}
         />
-        {failed && <p className="msg msg-error">No sets found in that text.</p>}
+        {failed && <p className="msg msg-error">Could not read text from the shared image.</p>}
+        {text.trim() !== '' && preview.length === 0 && <p className="msg msg-error">No sets found in that text.</p>}
+
+        {preview.length > 0 && (
+          <div className="wod-preview" aria-label="Import preview">
+            {preview.map((group, groupIndex) => (
+              <section key={groupIndex}>
+                <span className="section-label">
+                  {group.label}
+                  {group.items.length > 1 ? ` · ${group.items.length} columns` : ''}
+                </span>
+                {group.items.map((item, itemIndex) => (
+                  <p key={itemIndex} className="wod-preview-item">
+                    <span className="wod-preview-count">{item.sets.length}×</span>{' '}
+                    {item.sets[0]?.repsLabel ? `${item.sets[0].repsLabel} ` : ''}
+                    {item.name}
+                    {item.hint && <span className="wod-item-hint"> {item.hint}</span>}
+                  </p>
+                ))}
+              </section>
+            ))}
+          </div>
+        )}
 
         <button
           type="button"
           className="btn btn-primary wod-load"
-          disabled={!text.trim()}
+          disabled={preview.length === 0}
           onClick={() => importText(text)}
         >
           Load plan

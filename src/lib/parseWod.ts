@@ -92,6 +92,19 @@ function parseItemLine(line: string): { name: string; hint?: string; reps: numbe
   return { name: split[2].trim(), hint, reps: prefillReps(split[1]), repsLabel: split[1] };
 }
 
+/**
+ * A line that is only a rep token plus an optional hint — "4-6 @90%", "Max @50%" — is a
+ * drop-set stage of the exercise named above it, not an exercise of its own.
+ */
+function parseBareReps(line: string): { reps: number | null; repsLabel: string; hint?: string } | null {
+  const hintMatch = HINT.exec(line);
+  const token = (hintMatch ? line.slice(0, hintMatch.index) : line).trim();
+  if (!token || /\s/.test(token) || !isRepToken(token)) return null;
+
+  const hint = hintMatch ? hintMatch[1].replace(/\s+/g, '') : undefined;
+  return { reps: prefillReps(token), repsLabel: token, ...(hint ? { hint } : {}) };
+}
+
 function makeSets(count: number, reps: number | null, repsLabel: string): PlannedSet[] {
   return Array.from({ length: count }, () => ({ reps, repsLabel, weightKg: null }));
 }
@@ -124,6 +137,23 @@ export function parseWod(text: string): PlannedGroup[] {
         repsLabel: value,
         weightKg: null,
       }));
+      continue;
+    }
+
+    const stage = parseBareReps(line);
+    if (stage && previous) {
+      // The first stage fills in the bare exercise name above; later ones become
+      // sibling columns of the same exercise.
+      if (previous.sets.every((set) => set.repsLabel === '')) {
+        previous.sets = makeSets(rounds, stage.reps, stage.repsLabel);
+        if (stage.hint) previous.hint = stage.hint;
+      } else {
+        current.items.push({
+          name: previous.name,
+          ...(stage.hint ? { hint: stage.hint } : {}),
+          sets: makeSets(rounds, stage.reps, stage.repsLabel),
+        });
+      }
       continue;
     }
 

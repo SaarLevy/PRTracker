@@ -172,6 +172,23 @@ describe('parseWod', () => {
       ]);
     });
 
+    test('turns bare rep lines under an exercise name into drop-set stages of it', () => {
+      const [{ items }] = parseWod('3 Drop sets\nPress\n4-6 @90%\nMax @50%');
+
+      expect(items).toEqual([
+        {
+          name: 'Press',
+          hint: '@90%',
+          sets: Array.from({ length: 3 }, () => ({ reps: null, repsLabel: '4-6', weightKg: null })),
+        },
+        {
+          name: 'Press',
+          hint: '@50%',
+          sets: Array.from({ length: 3 }, () => ({ reps: null, repsLabel: 'Max', weightKg: null })),
+        },
+      ]);
+    });
+
     test('omits the hint entirely when there is none', () => {
       const [{ items }] = parseWod('1 Sets\n10 Hip thrust');
       expect(items[0]).not.toHaveProperty('hint');
