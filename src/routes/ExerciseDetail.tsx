@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo, useState } from 'react';
-import { Link, Redirect, useLocation, useParams } from 'wouter';
+import { Redirect, useLocation, useParams } from 'wouter';
 import { type EntryValues, LogBar } from '../components/EntryForm';
 import { HistoryList } from '../components/HistoryList';
 import { RecordsPanel } from '../components/RecordsPanel';
@@ -61,9 +61,16 @@ export default function ExerciseDetail() {
   return (
     <div className="screen">
       <header className="top-bar">
-        <Link href="/" className="icon-btn" aria-label="Back to exercises">
+        {/* A real history back, so arriving from the workout sheet returns there; a deep link
+            with no in-app history falls back to the exercise list. */}
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Back"
+          onClick={() => (window.history.length > 1 ? window.history.back() : navigate('/'))}
+        >
           <BackIcon />
-        </Link>
+        </button>
         {renaming ? (
           <form className="rename-form" onSubmit={handleRename}>
             <input

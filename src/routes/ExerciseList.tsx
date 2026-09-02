@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { GearIcon } from '../components/icons';
+import { BarbellIcon, GearIcon } from '../components/icons';
 import { addExercise, db } from '../db';
 import { formatWeightKg, timeAgo } from '../lib/format';
 import { searchExercises } from '../lib/exerciseSearch';
@@ -48,6 +48,9 @@ export default function ExerciseList() {
     <div className="screen">
       <header className="top-bar">
         <span className="wordmark">PRTRACKER</span>
+        <Link href="/workout" className="icon-btn" aria-label="Workout plan">
+          <BarbellIcon />
+        </Link>
         <Link href="/settings" className="icon-btn" aria-label="Settings">
           <GearIcon />
         </Link>
