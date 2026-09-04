@@ -8,8 +8,10 @@ import { type PlannedSet, parseWod } from '../lib/parseWod';
 import {
   type Plan,
   addRound,
+  carryOverWork,
   clearPlan,
   collectEntries,
+  exerciseKey,
   isSetFilled,
   loadPlan,
   planFromText,
@@ -23,9 +25,6 @@ const PLACEHOLDER = ['3 Super-sets', '8\\8 DB SL RDL', '15 Sit ups', '-', '3 Set
 // Module-level so StrictMode's double mount can't consume (and OCR) the same share twice;
 // arriving via the share target always reloads the document, which resets this.
 let shareChecked = false;
-
-/** Exercises are matched to plan items by name, case- and whitespace-insensitively. */
-const key = (name: string) => name.trim().toLowerCase();
 
 /** One box's address, flat enough to compare with === so the reveal is a single piece of state. */
 const cell = (groupIndex: number, itemIndex: number, setIndex: number) => `${groupIndex}:${itemIndex}:${setIndex}`;
@@ -150,6 +149,9 @@ export default function Workout() {
   const [, navigate] = useLocation();
   const [plan, setPlan] = useState<Plan | null>(() => loadPlan());
   const [text, setText] = useState('');
+  // The plan being edited, held aside so Cancel can put it back and a re-load can merge into it.
+  // Non-null only while the text screen is showing an edit rather than a fresh import.
+  const [editing, setEditing] = useState<Plan | null>(null);
   // Only OCR failures need a flag; parse feedback is live via the preview.
   const [failed, setFailed] = useState(false);
   const preview = useMemo(() => parseWod(text), [text]);
@@ -164,7 +166,7 @@ export default function Workout() {
 
   const exercises = useLiveQuery(() => db.exercises.toArray(), []);
   const idByName = useMemo(
-    () => new Map((exercises ?? []).map((exercise) => [exercise.name.trim().toLowerCase(), exercise.id])),
+    () => new Map((exercises ?? []).map((exercise) => [exerciseKey(exercise.name), exercise.id])),
     [exercises],
   );
   const exerciseNames = useMemo(() => (exercises ?? []).map((exercise) => exercise.name), [exercises]);
@@ -214,6 +216,7 @@ export default function Workout() {
       // fixed in the text before the plan is built.
       clearPlan();
       setPlan(null);
+      setEditing(null);
       setText(raw);
     })();
   }, []);
@@ -221,8 +224,23 @@ export default function Workout() {
   function importText(raw: string) {
     const next = planFromText(raw);
     if (!next) return;
-    savePlan(next);
-    setPlan(next);
+
+    let loaded = next;
+    if (editing) {
+      const { plan: carried, lost } = carryOverWork(next, editing);
+      // The only way to lose a weight is to take its exercise out of the text, so the count is
+      // always something you did on purpose and can undo by editing the name back.
+      if (lost > 0) {
+        const noun = lost === 1 ? 'set is' : 'sets are';
+        const warning = `${lost} ${noun} no longer in the plan, and the weight you entered will be lost.`;
+        if (!confirm(`${warning} Load anyway?`)) return;
+      }
+      loaded = carried;
+    }
+
+    savePlan(loaded);
+    setPlan(loaded);
+    setEditing(null);
     setText('');
     setCollapsed(new Set());
     setRevealed(null);
@@ -267,6 +285,29 @@ export default function Workout() {
     });
   }
 
+  /**
+   * Back to the text screen, with the plan left in storage.
+   *
+   * Nothing is destroyed until the edited text is loaded, so a mis-tap costs nothing: Cancel puts
+   * the plan back, and so does leaving the screen or the app reloading.
+   */
+  function handleEditPlan() {
+    if (!plan) return;
+    setEditing(plan);
+    // A plan stored before plans remembered their text drops you into an empty box. Cancel is
+    // still right there, and it only affects the one workout that spans the upgrade.
+    setText(plan.text ?? '');
+    setFailed(false);
+    setPlan(null);
+  }
+
+  function handleCancelEdit() {
+    if (!editing) return;
+    setPlan(editing);
+    setEditing(null);
+    setText('');
+  }
+
   function handleDiscard() {
     if (!confirm('Discard this plan? Any weights you filled in will be lost.')) return;
     clearPlan();
@@ -287,10 +328,10 @@ export default function Workout() {
     }
 
     const existing = await db.exercises.toArray();
-    const idByName = new Map(existing.map((exercise) => [exercise.name.trim().toLowerCase(), exercise.id]));
+    const idByName = new Map(existing.map((exercise) => [exerciseKey(exercise.name), exercise.id]));
 
     for (const entry of ready) {
-      const key = entry.name.trim().toLowerCase();
+      const key = exerciseKey(entry.name);
       let exerciseId = idByName.get(key);
       if (!exerciseId) {
         exerciseId = await addExercise(entry.name);
@@ -330,13 +371,28 @@ export default function Workout() {
             <BackIcon />
           </Link>
           <h1 className="exercise-title">Workout</h1>
+          {editing && (
+            <button type="button" className="btn btn-ghost btn-small" onClick={handleCancelEdit}>
+              Cancel
+            </button>
+          )}
         </header>
 
         <p className="empty">
-          <strong>No plan loaded.</strong>
-          <br />
-          Paste the workout text below. The preview shows how it will be read — edit the text until it looks
-          right, then load.
+          {editing ? (
+            <>
+              <strong>Editing the loaded plan.</strong>
+              <br />
+              Weights you have already filled in carry over to every exercise you leave alone.
+            </>
+          ) : (
+            <>
+              <strong>No plan loaded.</strong>
+              <br />
+              Paste the workout text below. The preview shows how it will be read — edit the text until it
+              looks right, then load.
+            </>
+          )}
         </p>
 
         <textarea
@@ -362,7 +418,7 @@ export default function Workout() {
                   {group.items.length > 1 ? ` · ${group.items.length} columns` : ''}
                 </span>
                 {group.items.map((item, itemIndex) => {
-                  const known = idByName.has(key(item.name));
+                  const known = idByName.has(exerciseKey(item.name));
                   const suggestion = known ? null : suggestSimilar(item.name, exerciseNames);
                   return (
                     <p key={itemIndex} className="wod-preview-item">
@@ -404,7 +460,7 @@ export default function Workout() {
           disabled={preview.length === 0}
           onClick={() => importText(text)}
         >
-          Load plan
+          {editing ? 'Update plan' : 'Load plan'}
         </button>
       </div>
     );
@@ -437,7 +493,10 @@ export default function Workout() {
               {open && group.items.length === 1 && (
                 <div className="wod-item">
                   <div className="wod-item-head">
-                    <ExerciseName name={group.items[0].name} exerciseId={idByName.get(key(group.items[0].name))} />
+                    <ExerciseName
+                      name={group.items[0].name}
+                      exerciseId={idByName.get(exerciseKey(group.items[0].name))}
+                    />
                     {group.items[0].hint && <span className="wod-item-hint">{group.items[0].hint}</span>}
                   </div>
                   <div className="wod-sets">
@@ -474,7 +533,7 @@ export default function Workout() {
                   <span />
                   {group.items.map((item, itemIndex) => (
                     <div key={itemIndex} className="wod-grid-head">
-                      <ExerciseName name={item.name} exerciseId={idByName.get(key(item.name))} />
+                      <ExerciseName name={item.name} exerciseId={idByName.get(exerciseKey(item.name))} />
                       {item.hint && <span className="wod-item-hint">{item.hint}</span>}
                     </div>
                   ))}
@@ -517,6 +576,12 @@ export default function Workout() {
           );
         })}
       </div>
+
+      {/* At the end of the scroll rather than in the dock: changing the plan is something you go
+          looking for, not something that should sit under your thumb beside "Finalize". */}
+      <button type="button" className="btn btn-ghost wod-edit" onClick={handleEditPlan}>
+        Edit plan
+      </button>
 
       <div className="dock">
         <button type="button" className="btn btn-primary btn-log" onClick={() => void handleFinalize()}>

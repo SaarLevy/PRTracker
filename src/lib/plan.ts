@@ -1,4 +1,4 @@
-import { type PlannedGroup, type PlannedSet, parseWod } from './parseWod';
+import { type PlannedGroup, type PlannedItem, type PlannedSet, parseWod } from './parseWod';
 import { toISODay } from './format';
 
 /**
@@ -12,6 +12,13 @@ export interface Plan {
   date: string;
   /** Import timestamp, used to tell one plan from another. */
   createdAt: string;
+  /**
+   * The workout text this plan was parsed from, kept so it can be edited and re-loaded.
+   *
+   * The parse is lossy — labels, hints and ladders all collapse into the same shape — so the
+   * only way back to editable text is to have kept the original.
+   */
+  text: string;
   groups: PlannedGroup[];
 }
 
@@ -19,6 +26,17 @@ export interface PlannedEntry {
   name: string;
   weightKg: number;
   reps: number;
+}
+
+/**
+ * The key two exercise names are compared by.
+ *
+ * Names are typed by hand, pasted from a gym app and read back out of OCR, so casing and stray
+ * whitespace carry no meaning. Matching a plan item to a tracked exercise and matching an edited
+ * plan back to the one it replaces are the same question, so they ask it the same way.
+ */
+export function exerciseKey(name: string): string {
+  return name.trim().toLowerCase();
 }
 
 const STORAGE_KEY = 'prtracker.plan';
@@ -45,7 +63,7 @@ export function clearPlan(): void {
 export function planFromText(text: string, now = new Date()): Plan | null {
   const groups = parseWod(text);
   if (groups.length === 0) return null;
-  return { date: toISODay(now), createdAt: now.toISOString(), groups };
+  return { date: toISODay(now), createdAt: now.toISOString(), text, groups };
 }
 
 /**
@@ -104,6 +122,70 @@ export function removeSet(plan: Plan, groupIndex: number, itemIndex: number, set
  */
 export function isSetFilled(set: PlannedSet): boolean {
   return set.weightKg !== null;
+}
+
+/** Copies one item's sets, keeping the weight already filled in beside it. */
+function carryItem(item: PlannedItem, before: PlannedItem): PlannedItem {
+  const sets = item.sets.map((set, index) => {
+    const old = before.sets[index];
+    if (!old) return { ...set };
+    // A weight is yours either way. A rep count arrives prefilled from the text, so it is only
+    // yours while the text still prescribes the same thing — edit "8 Squat" to "5 Squat" and the
+    // new prescription wins; type 7 into a "Max" box and leave the line alone and the 7 stays.
+    return { ...set, weightKg: old.weightKg, reps: old.repsLabel === set.repsLabel ? old.reps : set.reps };
+  });
+
+  // Sets added with "+" were never in the text, so the re-parse comes back short of them. Bringing
+  // the filled ones back is what makes editing an unrelated line safe; an empty one is noise that
+  // the "+" can recreate.
+  for (const old of before.sets.slice(item.sets.length)) {
+    if (isSetFilled(old)) sets.push({ ...old });
+  }
+
+  return { ...item, sets };
+}
+
+/**
+ * Carries the work already filled in on `previous` across to a freshly parsed `next`, and counts
+ * the filled sets that found no home.
+ *
+ * Editing the plan text re-parses it from scratch, so every box comes back empty; this is what puts
+ * the weights back. Items match by name rather than by position, so an exercise can move between
+ * groups and still find its own, and the Nth exercise of a name claims the Nth — `parseWod` gives
+ * drop-set stages the same name across sibling columns, so a name is not a unique key.
+ *
+ * The invariant: you only lose weights on an exercise you actually changed in the text. A set
+ * filled past what the new text prescribes is appended back rather than truncated, so the one way
+ * to lose one is to take its exercise out of the text. That is what `lost` counts and what the
+ * caller confirms before this result is kept. Neither argument is mutated.
+ */
+export function carryOverWork(next: Plan, previous: Plan): { plan: Plan; lost: number } {
+  const unclaimed = new Map<string, PlannedItem[]>();
+  for (const group of previous.groups) {
+    for (const item of group.items) {
+      const key = exerciseKey(item.name);
+      const bucket = unclaimed.get(key);
+      if (bucket) bucket.push(item);
+      else unclaimed.set(key, [item]);
+    }
+  }
+
+  const groups = next.groups.map((group) => ({
+    ...group,
+    items: group.items.map((item) => {
+      const before = unclaimed.get(exerciseKey(item.name))?.shift();
+      return before ? carryItem(item, before) : { ...item, sets: item.sets.map((set) => ({ ...set })) };
+    }),
+  }));
+
+  let lost = 0;
+  for (const bucket of unclaimed.values()) {
+    for (const item of bucket) lost += item.sets.filter(isSetFilled).length;
+  }
+
+  // The date rides along: edit a workout you started before midnight and it stays on its own day.
+  // `createdAt` deliberately does not — it keys the remount the freshly emptied inputs need.
+  return { plan: { ...next, date: previous.date, groups }, lost };
 }
 
 /**

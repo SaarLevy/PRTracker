@@ -741,6 +741,11 @@ button {
   margin-top: 12px;
 }
 
+.wod-edit {
+  width: 100%;
+  margin-top: 16px;
+}
+
 .wod-group {
   border-bottom: 1px solid var(--line);
   padding-bottom: 12px;
