@@ -392,6 +392,78 @@ button {
   color: var(--gold);
 }
 
+/* ---------- detail: progress ---------- */
+
+.progress-weight-select {
+  width: auto;
+  height: 36px;
+  margin: 10px 0;
+  font-size: 13px;
+}
+
+.progress-chart {
+  position: relative;
+  margin-top: 12px;
+  touch-action: pan-y;
+}
+
+.progress-chart svg {
+  display: block;
+}
+
+.chart-gridline {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.chart-axis-label {
+  fill: var(--muted);
+  font-size: 11px;
+  font-family: var(--body);
+}
+
+.chart-line {
+  stroke: var(--red);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart-point {
+  fill: var(--red);
+}
+
+.chart-guide {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.chart-tooltip {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.chart-tooltip strong {
+  font-family: var(--display);
+  font-size: 14px;
+}
+
+.chart-tooltip span {
+  color: var(--muted);
+}
+
 /* ---------- detail: history ---------- */
 
 .entry-row {

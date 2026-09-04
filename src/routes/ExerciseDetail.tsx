@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Redirect, useLocation, useParams } from 'wouter';
 import { type EntryValues, LogBar } from '../components/EntryForm';
 import { HistoryList } from '../components/HistoryList';
+import { ProgressSection } from '../components/ProgressSection';
 import { RecordsPanel } from '../components/RecordsPanel';
 import { BackIcon, DotsIcon } from '../components/icons';
 import { addEntry, deleteEntry, deleteExercise, renameExercise, updateEntry } from '../db';
@@ -16,6 +17,7 @@ export default function ExerciseDetail() {
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [tab, setTab] = useState<'records' | 'progress'>('records');
 
   // `null` (vs undefined-while-loading) means the exercise does not exist.
   const exercise = useLiveQuery(async () => (await db.exercises.get(id)) ?? null, [id]);
@@ -116,15 +118,30 @@ export default function ExerciseDetail() {
         )}
       </header>
 
-      <RecordsPanel records={records} />
-      <HistoryList
-        entries={newestFirst}
-        prIds={prIds}
-        editingId={editingId}
-        onEdit={setEditingId}
-        onSave={handleSave}
-        onDelete={handleDelete}
-      />
+      <div className="sort-toggle" role="group" aria-label="View">
+        <button type="button" aria-pressed={tab === 'records'} onClick={() => setTab('records')}>
+          Records
+        </button>
+        <button type="button" aria-pressed={tab === 'progress'} onClick={() => setTab('progress')}>
+          Progress
+        </button>
+      </div>
+
+      {tab === 'records' ? (
+        <>
+          <RecordsPanel records={records} />
+          <HistoryList
+            entries={newestFirst}
+            prIds={prIds}
+            editingId={editingId}
+            onEdit={setEditingId}
+            onSave={handleSave}
+            onDelete={handleDelete}
+          />
+        </>
+      ) : (
+        <ProgressSection entries={chrono} />
+      )}
 
       <LogBar key={id} defaultWeightKg={last?.weightKg} defaultReps={last?.reps} onLog={handleLog} />
     </div>
