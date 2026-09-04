@@ -49,6 +49,12 @@ export function suggestSimilar(name: string, candidates: string[]): string | nul
   return bestScore >= 0.5 ? best : null;
 }
 
+/**
+ * Matches a query against tracked exercises and the built-in library.
+ *
+ * Matching only: `existing` comes back in the order it was passed. Ordering the tracked list is
+ * the caller's job (see `sortExercises`), so the user's chosen sort applies while searching too.
+ */
 export function searchExercises(
   query: string,
   existing: Exercise[],
@@ -59,16 +65,10 @@ export function searchExercises(
   const lowerQuery = trimmed.toLowerCase();
 
   if (!trimmed) {
-    return {
-      existing: [...existing].sort((a, b) => a.name.localeCompare(b.name)),
-      libraryOnly: [],
-      showAddLiteral: false,
-    };
+    return { existing, libraryOnly: [], showAddLiteral: false };
   }
 
-  const existingMatches = existing
-    .filter((e) => e.name.toLowerCase().includes(lowerQuery))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const existingMatches = existing.filter((e) => e.name.toLowerCase().includes(lowerQuery));
 
   const trackedNames = new Set(existing.map((e) => e.name.toLowerCase()));
 

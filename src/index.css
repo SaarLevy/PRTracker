@@ -223,6 +223,37 @@ button {
   color: var(--red);
 }
 
+/* ---------- home: sort toggle ---------- */
+
+.sort-toggle {
+  display: flex;
+  gap: 2px;
+  margin: 0 0 4px;
+  padding: 2px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  width: fit-content;
+}
+
+.sort-toggle button {
+  padding: 5px 14px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  color: var(--muted);
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sort-toggle button[aria-pressed='true'] {
+  background: var(--surface-2);
+  color: var(--chalk);
+}
+
 /* ---------- home: exercise rows ---------- */
 
 .exercise-rows,

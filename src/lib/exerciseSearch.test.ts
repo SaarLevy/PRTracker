@@ -11,7 +11,7 @@ function exercise(name: string, id?: string): Exercise {
 const LIB = ['Squat', 'Squat Jump', 'Front Squat', 'Bench Press', 'Deadlift'] as const;
 
 describe('searchExercises', () => {
-  test('empty query returns all existing (alphabetical), no library, no add-literal', () => {
+  test('empty query returns all existing in input order, no library, no add-literal', () => {
     const b = exercise('Bench Press');
     const a = exercise('Arnold Press');
     const result = searchExercises('', [a, b], LIB);
@@ -87,11 +87,11 @@ describe('searchExercises', () => {
     expect(result.existing).toEqual([first, second]);
   });
 
-  test('existing matches are sorted alphabetically', () => {
+  test('existing matches keep input order; the caller decides the ordering', () => {
     const zed = exercise('Zercher Squat');
     const ab = exercise('Ab Squat Hold');
     const result = searchExercises('squat', [zed, ab], LIB);
-    expect(result.existing).toEqual([ab, zed]);
+    expect(result.existing).toEqual([zed, ab]);
   });
 });
 

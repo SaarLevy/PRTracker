@@ -5,12 +5,21 @@ import { BarbellIcon, GearIcon } from '../components/icons';
 import { addExercise, db } from '../db';
 import { formatWeightKg, timeAgo } from '../lib/format';
 import { searchExercises } from '../lib/exerciseSearch';
+import {
+  lastLoggedAt,
+  loadSortMode,
+  saveSortMode,
+  sortExercises,
+  type SortMode,
+} from '../lib/exerciseSort';
 import { chronological, overallBest } from '../lib/records';
 import type { Entry } from '../types';
 
 export default function ExerciseList() {
   const [, navigate] = useLocation();
   const [query, setQuery] = useState('');
+  // Lazy initializer: storage is read once on mount, not on every render.
+  const [sortMode, setSortMode] = useState<SortMode>(loadSortMode);
 
   const exercises = useLiveQuery(() => db.exercises.toArray(), []);
   const entries = useLiveQuery(() => db.entries.toArray(), []);
@@ -25,7 +34,19 @@ export default function ExerciseList() {
     return map;
   }, [entries]);
 
+  const loggedAt = useMemo(() => lastLoggedAt(entries ?? []), [entries]);
+
   const results = useMemo(() => searchExercises(query, exercises ?? []), [query, exercises]);
+
+  const sortedExisting = useMemo(
+    () => sortExercises(results.existing, sortMode, loggedAt),
+    [results.existing, sortMode, loggedAt],
+  );
+
+  function changeSort(mode: SortMode) {
+    setSortMode(mode);
+    saveSortMode(mode);
+  }
 
   const loaded = exercises !== undefined && entries !== undefined;
   const now = new Date();
@@ -64,8 +85,27 @@ export default function ExerciseList() {
         </p>
       )}
 
+      {loaded && exercises.length > 1 && (
+        <div className="sort-toggle" role="group" aria-label="Sort exercises">
+          <button
+            type="button"
+            aria-pressed={sortMode === 'recent'}
+            onClick={() => changeSort('recent')}
+          >
+            Recent
+          </button>
+          <button
+            type="button"
+            aria-pressed={sortMode === 'alpha'}
+            onClick={() => changeSort('alpha')}
+          >
+            A–Z
+          </button>
+        </div>
+      )}
+
       <ul className="exercise-rows">
-        {results.existing.map((exercise) => {
+        {sortedExisting.map((exercise) => {
           const list = entriesByExercise.get(exercise.id) ?? [];
           const latest = chronological(list).at(-1);
           const best = overallBest(list);
