@@ -1,11 +1,21 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { BackIcon } from '../components/icons';
 import { addEntry, addExercise, db } from '../db';
 import { suggestSimilar } from '../lib/exerciseSearch';
 import { type PlannedSet, parseWod } from '../lib/parseWod';
-import { type Plan, clearPlan, collectEntries, loadPlan, planFromText, savePlan } from '../lib/plan';
+import {
+  type Plan,
+  addRound,
+  clearPlan,
+  collectEntries,
+  isSetFilled,
+  loadPlan,
+  planFromText,
+  removeSet,
+  savePlan,
+} from '../lib/plan';
 import { type OcrProgress, ocrImage, takeSharedWod } from '../lib/shareImport';
 
 const PLACEHOLDER = ['3 Super-sets', '8\\8 DB SL RDL', '15 Sit ups', '-', '3 Sets', '8-12 Deadlift'].join('\n');
@@ -17,9 +27,26 @@ let shareChecked = false;
 /** Exercises are matched to plan items by name, case- and whitespace-insensitively. */
 const key = (name: string) => name.trim().toLowerCase();
 
+/** One box's address, flat enough to compare with === so the reveal is a single piece of state. */
+const cell = (groupIndex: number, itemIndex: number, setIndex: number) => `${groupIndex}:${itemIndex}:${setIndex}`;
+
+/**
+ * Long enough not to fire while a finger settles before typing, short enough to beat the OS's
+ * own text-selection gesture to the punch.
+ */
+const LONG_PRESS_MS = 400;
+
+/** A press that slides this far is the start of a scroll, not a hold. */
+const MOVE_TOLERANCE_PX = 8;
+
 interface SetBoxProps {
   set: PlannedSet;
   onChange: (patch: Partial<PlannedSet>) => void;
+  /** Whether this box is the one showing its "−". At most one box on screen is. */
+  revealed: boolean;
+  onReveal: () => void;
+  onRemove: () => void;
+  removeLabel: string;
 }
 
 /**
@@ -28,10 +55,48 @@ interface SetBoxProps {
  * Both are uncontrolled so a half-typed decimal like "62." survives the keystroke; the parsed
  * value is pushed up on every change. The size difference is deliberate — weight is the field
  * you tap between sets, and an equally sized neighbour is how you mis-tap it.
+ *
+ * A long press reveals the button that removes the set. The press is only watched, never
+ * swallowed — nothing here calls preventDefault, so a normal tap still lands on the input,
+ * places the caret and raises the keyboard. The native text loupe that would otherwise eat the
+ * gesture is held off in CSS, which drops `user-select` on an input until it is focused.
  */
-function SetBox({ set, onChange }: SetBoxProps) {
+function SetBox({ set, onChange, revealed, onReveal, onRemove, removeLabel }: SetBoxProps) {
+  const timer = useRef<number | null>(null);
+  const origin = useRef({ x: 0, y: 0 });
+
+  function cancel() {
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = null;
+  }
+
+  // A press that outlives its box — the tree remounts on a removal — must not fire on the set
+  // that took its place.
+  useEffect(() => cancel, []);
+
   return (
-    <div className="set-box">
+    <div
+      className="set-box"
+      onPointerDown={(event) => {
+        origin.current = { x: event.clientX, y: event.clientY };
+        cancel();
+        timer.current = window.setTimeout(onReveal, LONG_PRESS_MS);
+      }}
+      onPointerMove={(event) => {
+        const { x, y } = origin.current;
+        if (Math.hypot(event.clientX - x, event.clientY - y) > MOVE_TOLERANCE_PX) cancel();
+      }}
+      onPointerUp={cancel}
+      onPointerCancel={cancel}
+      onPointerLeave={cancel}
+      // Right-click is the way in with a mouse — and with a keyboard, since Shift+F10 raises a
+      // context menu on the focused input. Pre-empting the menu also stops Android opening its
+      // own selection popup under a held finger.
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onReveal();
+      }}
+    >
       <input
         className="set-weight"
         type="text"
@@ -56,6 +121,11 @@ function SetBox({ set, onChange }: SetBoxProps) {
           onChange({ reps: /^\d+$/.test(raw) ? Number(raw) : null });
         }}
       />
+      {revealed && (
+        <button type="button" className="set-remove" aria-label={removeLabel} onClick={onRemove}>
+          −
+        </button>
+      )}
     </div>
   );
 }
@@ -85,6 +155,12 @@ export default function Workout() {
   const preview = useMemo(() => parseWod(text), [text]);
   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
   const [importing, setImporting] = useState<OcrProgress | null>(null);
+  // The one set box showing its remove button, as a `cell` address.
+  const [revealed, setRevealed] = useState<string | null>(null);
+  // Bumped when a set is removed. The set inputs are uncontrolled, so they read the plan once,
+  // when they mount: without this, deleting set 2 leaves set 3 — and the red "filled" border on
+  // it — still showing set 2's weight. Same escape hatch as the plan timestamp it sits beside.
+  const [removals, setRemovals] = useState(0);
 
   const exercises = useLiveQuery(() => db.exercises.toArray(), []);
   const idByName = useMemo(
@@ -92,6 +168,22 @@ export default function Workout() {
     [exercises],
   );
   const exerciseNames = useMemo(() => (exercises ?? []).map((exercise) => exercise.name), [exercises]);
+
+  useEffect(() => {
+    if (revealed === null) return;
+
+    // Any press that is not on the "−" itself puts the box back, including the press that begins
+    // a scroll — which is what keeps this a transient reveal rather than an edit mode. The
+    // `closest` guard is load-bearing: without it the button unmounts before its own click fires.
+    function dismiss(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Element && target.closest('.set-remove')) return;
+      setRevealed(null);
+    }
+
+    document.addEventListener('pointerdown', dismiss);
+    return () => document.removeEventListener('pointerdown', dismiss);
+  }, [revealed]);
 
   useEffect(() => {
     if (shareChecked) return;
@@ -103,7 +195,7 @@ export default function Workout() {
 
       // A share replaces the plan wholesale; only ask when there is filled-in work to lose.
       const current = loadPlan();
-      const touched = current?.groups.some((g) => g.items.some((i) => i.sets.some((s) => s.weightKg !== null)));
+      const touched = current?.groups.some((g) => g.items.some((i) => i.sets.some(isSetFilled)));
       if (touched && !confirm('Replace the current plan? Weights you filled in will be lost.')) return;
 
       let raw = shared.text ?? '';
@@ -133,6 +225,8 @@ export default function Workout() {
     setPlan(next);
     setText('');
     setCollapsed(new Set());
+    setRevealed(null);
+    setRemovals(0);
   }
 
   function updateSet(groupIndex: number, itemIndex: number, setIndex: number, patch: Partial<PlannedSet>) {
@@ -141,6 +235,28 @@ export default function Workout() {
     Object.assign(next.groups[groupIndex].items[itemIndex].sets[setIndex], patch);
     savePlan(next);
     setPlan(next);
+  }
+
+  function handleAddRound(groupIndex: number) {
+    if (!plan) return;
+    const next = addRound(plan, groupIndex);
+    savePlan(next);
+    setPlan(next);
+  }
+
+  function handleRemoveSet(groupIndex: number, itemIndex: number, setIndex: number) {
+    if (!plan) return;
+    const set = plan.groups[groupIndex]?.items[itemIndex]?.sets[setIndex];
+    if (!set) return;
+    // Same rule as the share import and the discard button: only stop you when there is work to lose.
+    if (isSetFilled(set) && !confirm('Remove this set? The weight you entered will be lost.')) return;
+
+    const next = removeSet(plan, groupIndex, itemIndex, setIndex);
+    savePlan(next);
+    setPlan(next);
+    // Not cosmetic: the address would otherwise point at whichever set slid up into the gap.
+    setRevealed(null);
+    setRemovals((count) => count + 1);
   }
 
   function toggleGroup(index: number) {
@@ -308,7 +424,7 @@ export default function Workout() {
         </button>
       </header>
 
-      <div key={plan.createdAt}>
+      <div key={`${plan.createdAt}:${removals}`}>
         {plan.groups.map((group, groupIndex) => {
           const open = !collapsed.has(groupIndex);
           return (
@@ -330,8 +446,20 @@ export default function Workout() {
                         key={setIndex}
                         set={set}
                         onChange={(patch) => updateSet(groupIndex, 0, setIndex, patch)}
+                        revealed={revealed === cell(groupIndex, 0, setIndex)}
+                        onReveal={() => setRevealed(cell(groupIndex, 0, setIndex))}
+                        onRemove={() => handleRemoveSet(groupIndex, 0, setIndex)}
+                        removeLabel={`Remove set ${setIndex + 1} of ${group.items[0].name}`}
                       />
                     ))}
+                    <button
+                      type="button"
+                      className="set-add"
+                      aria-label={`Add a set to ${group.items[0].name}`}
+                      onClick={() => handleAddRound(groupIndex)}
+                    >
+                      +
+                    </button>
                   </div>
                 </div>
               )}
@@ -362,6 +490,10 @@ export default function Workout() {
                             key={itemIndex}
                             set={item.sets[round]}
                             onChange={(patch) => updateSet(groupIndex, itemIndex, round, patch)}
+                            revealed={revealed === cell(groupIndex, itemIndex, round)}
+                            onReveal={() => setRevealed(cell(groupIndex, itemIndex, round))}
+                            onRemove={() => handleRemoveSet(groupIndex, itemIndex, round)}
+                            removeLabel={`Remove set ${round + 1} of ${item.name}`}
                           />
                         ) : (
                           <span key={itemIndex} />
@@ -369,6 +501,16 @@ export default function Workout() {
                       )}
                     </Fragment>
                   ))}
+
+                  {/* A round is the unit here, so one "+" adds a set to every column at once. */}
+                  <button
+                    type="button"
+                    className="set-add"
+                    aria-label={`Add a round to ${group.label}`}
+                    onClick={() => handleAddRound(groupIndex)}
+                  >
+                    +
+                  </button>
                 </div>
               )}
             </section>

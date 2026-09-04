@@ -55,11 +55,15 @@ button {
 @media (prefers-reduced-motion: no-preference) {
   .btn,
   .icon-btn,
-  .stepper button {
+  .stepper button,
+  .set-add,
+  .set-remove {
     transition: background-color 120ms ease, transform 80ms ease;
   }
   .btn:active,
-  .stepper button:active {
+  .stepper button:active,
+  .set-add:active,
+  .set-remove:active {
     transform: translateY(1px);
   }
 }
@@ -827,6 +831,7 @@ button {
 }
 
 .set-box {
+  position: relative; /* anchors the "−" a long press reveals */
   display: flex;
   flex-direction: column;
   width: 72px;
@@ -834,6 +839,8 @@ button {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
+  touch-action: manipulation; /* no double-tap zoom competing with a held finger */
+  -webkit-touch-callout: none; /* iOS: no "Copy / Look Up" sheet on the hold */
 }
 
 /* A filled set reads at a glance, so you can find the next empty one mid-workout. */
@@ -841,12 +848,21 @@ button {
   border-color: var(--red);
 }
 
+/* Unselectable until you are actually editing: a hold on a box you have not tapped means
+   "remove this set", and the text loupe would eat the gesture. Focus hands selection back. */
 .set-weight,
 .set-reps {
   width: 100%;
   background: none;
   border: 0;
   text-align: center;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.set-box input:focus {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .set-weight {
@@ -868,4 +884,56 @@ button {
 .set-reps::placeholder {
   color: var(--muted);
   font-weight: 400;
+}
+
+/* Glyphs, not text: a hold on either of these is a press, never a word to select. */
+.set-remove,
+.set-add {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Costs nothing until a long press asks for it. Small and cornered on purpose: it sits over a
+   bare corner of the weight field, and everything under it stays where it was. */
+.set-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: var(--red);
+  border: none;
+  border-radius: 50%;
+  color: var(--chalk);
+  font-family: var(--display);
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* Shaped like a set box so it reads as "one more of these", dashed so it never reads as one.
+   52 + 26 + two borders is a set box, which sets no height of its own. */
+.set-add {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  min-height: 80px;
+  padding: 0;
+  background: none;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-family: var(--display);
+  font-size: 28px;
+  line-height: 1;
+}
+
+/* In a grid the round is the unit, so it is one bar across every column, not a tile each. */
+.wod-grid .set-add {
+  grid-column: 2 / -1;
+  width: auto;
+  min-height: 0;
+  height: 44px;
 }

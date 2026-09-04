@@ -1,4 +1,4 @@
-import { type PlannedGroup, parseWod } from './parseWod';
+import { type PlannedGroup, type PlannedSet, parseWod } from './parseWod';
 import { toISODay } from './format';
 
 /**
@@ -66,6 +66,44 @@ export function consumeSharedPlan(): void {
   // Drop the param either way, so a refresh cannot re-import over weights already filled in.
   const { origin, pathname } = window.location;
   window.history.replaceState(null, '', `${origin}${pathname}#/workout`);
+}
+
+function nextSet(previous: PlannedSet | undefined): PlannedSet {
+  return { reps: previous?.reps ?? null, repsLabel: previous?.repsLabel ?? '', weightKg: null };
+}
+
+/**
+ * Adds one set to every item in a group — one more set of a lone exercise, one more round of a
+ * superset. They are the same operation because a lone exercise is a one-item group.
+ *
+ * The new set copies the rep prescription of the one before it but never its weight: a prefilled
+ * weight would count as a finished set the moment you tapped "+". Ragged columns each grow by
+ * one rather than being padded up to the longest, so one tap never adds two sets to a column.
+ */
+export function addRound(plan: Plan, groupIndex: number): Plan {
+  if (!plan.groups[groupIndex]) return plan;
+  const next = structuredClone(plan);
+  for (const item of next.groups[groupIndex].items) item.sets.push(nextSet(item.sets.at(-1)));
+  return next;
+}
+
+/** Drops one set from one item. Emptying an item is allowed — the "+" always brings one back. */
+export function removeSet(plan: Plan, groupIndex: number, itemIndex: number, setIndex: number): Plan {
+  const sets = plan.groups[groupIndex]?.items[itemIndex]?.sets;
+  if (!sets || setIndex < 0 || setIndex >= sets.length) return plan;
+  const next = structuredClone(plan);
+  next.groups[groupIndex].items[itemIndex].sets.splice(setIndex, 1);
+  return next;
+}
+
+/**
+ * Whether a set holds work you would lose by deleting it.
+ *
+ * Only the weight counts. Rep counts arrive prefilled from the WOD, so they cannot tell a set you
+ * did from one you have not started — and a set with no weight can never become an entry anyway.
+ */
+export function isSetFilled(set: PlannedSet): boolean {
+  return set.weightKg !== null;
 }
 
 /**
