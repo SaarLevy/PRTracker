@@ -93,6 +93,58 @@ describe('searchExercises', () => {
     const result = searchExercises('squat', [zed, ab], LIB);
     expect(result.existing).toEqual([zed, ab]);
   });
+
+  describe('shorthand', () => {
+    const DEADLIFTS = ['Romanian Deadlift', 'Deadlift'] as const;
+
+    test('finds a tracked exercise from shorthand in the query', () => {
+      const rdl = exercise('Dumbbell Romanian Deadlift');
+      expect(searchExercises('db rdl', [rdl], LIB).existing).toEqual([rdl]);
+    });
+
+    test('finds a tracked shorthand name from the full words', () => {
+      const rdl = exercise('DB SL RDL');
+      expect(searchExercises('romanian', [rdl], LIB).existing).toEqual([rdl]);
+      expect(searchExercises('single leg', [rdl], LIB).existing).toEqual([rdl]);
+    });
+
+    test('matches the query words in any order', () => {
+      const rdl = exercise('DB SL RDL');
+      expect(searchExercises('rdl db', [rdl], LIB).existing).toEqual([rdl]);
+    });
+
+    test('ignores plurals and hyphens', () => {
+      const pushUp = exercise('Push-Up');
+      expect(searchExercises('push ups', [pushUp], LIB).existing).toEqual([pushUp]);
+      expect(searchExercises('pushups', [pushUp], LIB).existing).toEqual([pushUp]);
+    });
+
+    test('finds a library exercise from shorthand', () => {
+      expect(searchExercises('rdl', [], DEADLIFTS).libraryOnly).toEqual(['Romanian Deadlift']);
+    });
+
+    test('finds a library exercise from another name for it', () => {
+      const raises = ['Dumbbell Lateral Raise', 'Front Raise'];
+      expect(searchExercises('shoulder abduction', [], raises).libraryOnly).toEqual(['Dumbbell Lateral Raise']);
+    });
+
+    test('hides a library entry already tracked under shorthand', () => {
+      const rdl = exercise('RDL');
+      expect(searchExercises('deadlift', [rdl], DEADLIFTS).libraryOnly).toEqual(['Deadlift']);
+    });
+
+    test('offers no add row when a tracked exercise is the query in other words', () => {
+      const rdl = exercise('Dumbbell Romanian Deadlift');
+      expect(searchExercises('DB RDL', [rdl], LIB).showAddLiteral).toBe(false);
+    });
+
+    test('still offers the add row when shorthand only partly matches', () => {
+      const rdl = exercise('DB SL RDL');
+      const result = searchExercises('DB RDL', [rdl], LIB);
+      expect(result.existing).toEqual([rdl]);
+      expect(result.showAddLiteral).toBe(true);
+    });
+  });
 });
 
 describe('suggestSimilar', () => {

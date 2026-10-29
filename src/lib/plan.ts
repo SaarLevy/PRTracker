@@ -1,4 +1,5 @@
 import { type PlannedGroup, type PlannedItem, type PlannedSet, parseWod } from './parseWod';
+import { aliasKey } from './exerciseAliases';
 import { toISODay } from './format';
 
 /**
@@ -31,12 +32,13 @@ export interface PlannedEntry {
 /**
  * The key two exercise names are compared by.
  *
- * Names are typed by hand, pasted from a gym app and read back out of OCR, so casing and stray
- * whitespace carry no meaning. Matching a plan item to a tracked exercise and matching an edited
- * plan back to the one it replaces are the same question, so they ask it the same way.
+ * Names are typed by hand, pasted from a gym app and read back out of OCR, so casing, stray
+ * whitespace, plurals and shorthand carry no meaning: "DB RDL" is a Dumbbell Romanian Deadlift.
+ * Matching a plan item to a tracked exercise and matching an edited plan back to the one it
+ * replaces are the same question, so they ask it the same way.
  */
 export function exerciseKey(name: string): string {
-  return name.trim().toLowerCase();
+  return aliasKey(name);
 }
 
 const STORAGE_KEY = 'prtracker.plan';

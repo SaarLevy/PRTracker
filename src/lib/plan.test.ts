@@ -330,6 +330,16 @@ describe('carryOverWork', () => {
     expect(filled(carryOverWork(next, previous).plan)).toEqual([['back squat', '100/null']]);
   });
 
+  test('carries weights across to the same exercise written in shorthand', () => {
+    const previous = planOf([{ 'Dumbbell Romanian Deadlift': [{ weightKg: 30 }] }]);
+    const next = planOf([{ 'DB RDL': [{}] }]);
+
+    const { plan: result, lost } = carryOverWork(next, previous);
+
+    expect(filled(result)).toEqual([['DB RDL', '30/null']]);
+    expect(lost).toBe(0);
+  });
+
   test('keeps the previous date but takes the new createdAt', () => {
     const previous = planOf([{ Deadlift: [{ weightKg: 100 }] }], '2026-08-16');
     const next = planOf([{ Deadlift: [{}] }], '2026-08-17');

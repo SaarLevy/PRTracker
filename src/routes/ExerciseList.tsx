@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { BarbellIcon, GearIcon } from '../components/icons';
 import { addExercise, db } from '../db';
+import { findExercise } from '../lib/exerciseAliases';
 import { formatWeightKg, timeAgo } from '../lib/format';
 import { searchExercises } from '../lib/exerciseSearch';
 import {
@@ -54,7 +55,7 @@ export default function ExerciseList() {
   async function handleResolve(name: string) {
     const trimmed = name.trim();
     if (!trimmed) return;
-    const match = exercises?.find((e) => e.name.trim().toLowerCase() === trimmed.toLowerCase());
+    const match = findExercise(trimmed, exercises ?? []);
     const id = match ? match.id : await addExercise(trimmed);
     setQuery('');
     navigate(`/exercise/${id}`);

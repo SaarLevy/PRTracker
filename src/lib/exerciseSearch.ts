@@ -1,3 +1,4 @@
+import { aliasKey, expandWords } from './exerciseAliases';
 import { EXERCISE_LIBRARY } from './exerciseLibrary';
 import type { Exercise } from '../types';
 
@@ -7,11 +8,29 @@ export interface ExerciseSearchResult {
   showAddLiteral: boolean;
 }
 
-function matchTier(name: string, query: string): 0 | 1 | 2 | -1 {
+interface SearchQuery {
+  lower: string;
+  /** The query with shorthand spelled out; see `aliasKey`. Empty when nothing in it is a word. */
+  key: string;
+  words: string[];
+}
+
+/**
+ * How well a name answers a query, best first, or -1 for not at all.
+ *
+ * Each tier holds for the name as typed or once shorthand is spelled out, so "rdl" is an exact
+ * match for Romanian Deadlift. The last tier lets the words land anywhere in any order: "db rdl"
+ * finds "DB SL RDL". The as-typed check stays because a half-typed plural ("crunche") only
+ * matches before it is singularized.
+ */
+function matchTier(name: string, query: SearchQuery): 0 | 1 | 2 | 3 | -1 {
   const lower = name.toLowerCase();
-  if (lower === query) return 0;
-  if (lower.startsWith(query)) return 1;
-  if (lower.includes(query)) return 2;
+  const key = aliasKey(name);
+  const hasKey = query.key !== '';
+  if (lower === query.lower || (hasKey && key === query.key)) return 0;
+  if (lower.startsWith(query.lower) || (hasKey && key.startsWith(query.key))) return 1;
+  if (lower.includes(query.lower) || (hasKey && key.includes(query.key))) return 2;
+  if (hasKey && query.words.every((word) => key.includes(word))) return 3;
   return -1;
 }
 
@@ -62,29 +81,30 @@ export function searchExercises(
   limit = 20,
 ): ExerciseSearchResult {
   const trimmed = query.trim();
-  const lowerQuery = trimmed.toLowerCase();
 
   if (!trimmed) {
     return { existing, libraryOnly: [], showAddLiteral: false };
   }
 
-  const existingMatches = existing.filter((e) => e.name.toLowerCase().includes(lowerQuery));
+  const words = expandWords(trimmed);
+  const search: SearchQuery = { lower: trimmed.toLowerCase(), key: words.join(''), words };
 
-  const trackedNames = new Set(existing.map((e) => e.name.toLowerCase()));
+  const existingMatches = existing.filter((e) => matchTier(e.name, search) >= 0);
+
+  // Keyed through shorthand, so tracking "RDL" hides the library's Romanian Deadlift.
+  const trackedKeys = new Set(existing.map((e) => aliasKey(e.name)));
 
   const libraryOnly = library
-    .filter((name) => !trackedNames.has(name.toLowerCase()))
-    .map((name) => ({ name, tier: matchTier(name, lowerQuery) }))
+    .filter((name) => !trackedKeys.has(aliasKey(name)))
+    .map((name) => ({ name, tier: matchTier(name, search) }))
     .filter((entry) => entry.tier >= 0)
     .sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name))
     .slice(0, limit)
     .map((entry) => entry.name);
 
-  const shownNames = new Set([
-    ...existingMatches.map((e) => e.name.toLowerCase()),
-    ...libraryOnly.map((name) => name.toLowerCase()),
-  ]);
-  const showAddLiteral = !shownNames.has(lowerQuery);
+  // "Add DB RDL" next to a tracked Dumbbell Romanian Deadlift would only make a duplicate.
+  const shownKeys = new Set([...existingMatches.map((e) => aliasKey(e.name)), ...libraryOnly.map(aliasKey)]);
+  const showAddLiteral = !shownKeys.has(search.key);
 
   return { existing: existingMatches, libraryOnly, showAddLiteral };
 }

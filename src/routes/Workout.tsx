@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { BackIcon } from '../components/icons';
 import { addEntry, addExercise, db } from '../db';
+import { findExercise } from '../lib/exerciseAliases';
 import { suggestSimilar } from '../lib/exerciseSearch';
 import { type PlannedSet, parseWod } from '../lib/parseWod';
 import {
@@ -11,7 +12,6 @@ import {
   carryOverWork,
   clearPlan,
   collectEntries,
-  exerciseKey,
   isSetFilled,
   loadPlan,
   planFromText,
@@ -165,10 +165,9 @@ export default function Workout() {
   const [removals, setRemovals] = useState(0);
 
   const exercises = useLiveQuery(() => db.exercises.toArray(), []);
-  const idByName = useMemo(
-    () => new Map((exercises ?? []).map((exercise) => [exerciseKey(exercise.name), exercise.id])),
-    [exercises],
-  );
+  // The tracked exercise a plan item will be logged to, shorthand and all: "DB RDL" finds a
+  // tracked Dumbbell Romanian Deadlift.
+  const trackedId = (name: string) => findExercise(name, exercises ?? [])?.id;
   const exerciseNames = useMemo(() => (exercises ?? []).map((exercise) => exercise.name), [exercises]);
 
   useEffect(() => {
@@ -327,15 +326,14 @@ export default function Workout() {
       if (!confirm(`${incomplete} ${noun} missing a weight or reps and won't be logged. Finalize anyway?`)) return;
     }
 
-    const existing = await db.exercises.toArray();
-    const idByName = new Map(existing.map((exercise) => [exerciseKey(exercise.name), exercise.id]));
+    const known: { id: string; name: string }[] = await db.exercises.toArray();
 
     for (const entry of ready) {
-      const key = exerciseKey(entry.name);
-      let exerciseId = idByName.get(key);
+      let exerciseId = findExercise(entry.name, known)?.id;
       if (!exerciseId) {
         exerciseId = await addExercise(entry.name);
-        idByName.set(key, exerciseId);
+        // So a later "Dumbbell Row" in the same plan joins the "DB Row" just created.
+        known.push({ id: exerciseId, name: entry.name });
       }
       await addEntry({ exerciseId, date: plan.date, weightKg: entry.weightKg, reps: entry.reps });
     }
@@ -418,7 +416,7 @@ export default function Workout() {
                   {group.items.length > 1 ? ` · ${group.items.length} columns` : ''}
                 </span>
                 {group.items.map((item, itemIndex) => {
-                  const known = idByName.has(exerciseKey(item.name));
+                  const known = trackedId(item.name) !== undefined;
                   const suggestion = known ? null : suggestSimilar(item.name, exerciseNames);
                   return (
                     <p key={itemIndex} className="wod-preview-item">
@@ -495,7 +493,7 @@ export default function Workout() {
                   <div className="wod-item-head">
                     <ExerciseName
                       name={group.items[0].name}
-                      exerciseId={idByName.get(exerciseKey(group.items[0].name))}
+                      exerciseId={trackedId(group.items[0].name)}
                     />
                     {group.items[0].hint && <span className="wod-item-hint">{group.items[0].hint}</span>}
                   </div>
@@ -533,7 +531,7 @@ export default function Workout() {
                   <span />
                   {group.items.map((item, itemIndex) => (
                     <div key={itemIndex} className="wod-grid-head">
-                      <ExerciseName name={item.name} exerciseId={idByName.get(exerciseKey(item.name))} />
+                      <ExerciseName name={item.name} exerciseId={trackedId(item.name)} />
                       {item.hint && <span className="wod-item-hint">{item.hint}</span>}
                     </div>
                   ))}
